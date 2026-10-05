@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Digital Image Forensics Tool | CSDF</title>
+  <meta name="description" content="Web-based digital image forensics: metadata, hashing, ELA, histogram, noise, clone detection and PDF reports.">
+  <link href="{{ url_for('static', filename='vendor/bootstrap.min.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='vendor/bootstrap-icons.min.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+
+<!-- ============ MOBILE TOP BAR ============ -->
+<header class="topbar d-lg-none">
+  <button class="btn btn-icon" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-label="Open menu"><i class="bi bi-list fs-4"></i></button>
+  <span class="brand-text"><i class="bi bi-shield-lock-fill text-accent"></i> ImageForensics</span>
+  <span></span>
+</header>
+
+<!-- ============ SIDEBAR ============ -->
+<aside class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="sidebar">
+  <div class="sidebar-inner">
+    <div class="brand">
+      <div class="brand-logo"><i class="bi bi-shield-lock-fill"></i></div>
+      <div>
+        <div class="brand-text">ImageForensics</div>
+        <div class="brand-sub">CSDF Mini Project</div>
+      </div>
+    </div>
+
+    <nav class="nav flex-column nav-links" id="nav">
+      <a class="nav-link active" data-view="analyze"><i class="bi bi-upload"></i> Upload &amp; Overview</a>
+      <a class="nav-link" data-view="metadata"><i class="bi bi-card-list"></i> Metadata</a>
+      <a class="nav-link" data-view="integrity"><i class="bi bi-fingerprint"></i> Integrity &amp; Hashes</a>
+      <a class="nav-link" data-view="ela"><i class="bi bi-layers-half"></i> Error Level Analysis</a>
+      <a class="nav-link" data-view="histogram"><i class="bi bi-bar-chart-line"></i> Histogram</a>
+      <a class="nav-link" data-view="noise"><i class="bi bi-soundwave"></i> Noise &amp; Clone</a>
+      <a class="nav-link" data-view="compare"><i class="bi bi-intersect"></i> Image Comparison</a>
+      <a class="nav-link" data-view="report"><i class="bi bi-file-earmark-pdf"></i> Forensic Report</a>
+      <a class="nav-link" data-view="about"><i class="bi bi-info-circle"></i> How it works</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-dot"></div> System online
+      <div class="small text-muted mt-1">Max upload: {{ max_mb }} MB &middot; JPG / PNG / BMP</div>
+    </div>
+  </div>
+</aside>
+
+<!-- ============ MAIN ============ -->
+<main class="content">
+
+  <!-- ================= VIEW: ANALYZE ================= -->
+  <section class="view active" id="view-analyze">
+    <div class="page-head">
+      <h1>Image Analysis</h1>
+      <p>Upload an image to detect manipulation, verify authenticity and extract forensic evidence.</p>
+    </div>
+
+    <div id="alertBox"></div>
+
+    <div class="row g-4">
+      <div class="col-xl-6">
+        <div class="card-x h-100">
+          <div class="card-x-title"><i class="bi bi-cloud-arrow-up"></i> Evidence upload</div>
+          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload image">
+            <i class="bi bi-image dz-icon"></i>
+            <div class="dz-title">Drag &amp; drop an image here</div>
+            <div class="dz-sub">or click to browse &middot; JPG, JPEG, PNG, BMP</div>
+            <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.bmp,image/jpeg,image/png,image/bmp" hidden>
+          </div>
+          <div class="mt-3">
+            <label class="form-label small text-muted" for="expectedHash">Reference hash (optional) &mdash; MD5 or SHA-256 to verify integrity</label>
+            <input type="text" id="expectedHash" class="form-control mono" placeholder="Paste known hash of the original file" autocomplete="off">
+          </div>
+          <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-accent flex-grow-1" id="analyzeBtn" disabled><i class="bi bi-search"></i> Run Forensic Analysis</button>
+            <button class="btn btn-outline-secondary" id="resetBtn" title="Clear"><i class="bi bi-x-lg"></i></button>
+          </div>
+          <div class="progress-wrap d-none" id="progressWrap">
+            <div class="progress" role="progressbar" aria-label="Analysis progress">
+              <div class="progress-bar progress-bar-striped progress-bar-animated" id="progressBar" style="width:0%"></div>
+            </div>
+            <div class="small text-muted mt-2" id="progressText">Uploading...</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-xl-6">
+        <div class="card-x h-100">
+          <div class="card-x-title"><i class="bi bi-eye"></i> Image preview</div>
+          <div class="preview-box" id="previewBox">
+            <div class="empty-state"><i class="bi bi-card-image"></i><span>No image selected</span></div>
+          </div>
+          <div class="small text-muted mt-2 mono" id="previewInfo"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overview results -->
+    <div id="overview" class="d-none mt-4">
+      <div class="row g-4">
+        <div class="col-lg-4">
+          <div class="card-x h-100 text-center">
+            <div class="card-x-title justify-content-center"><i class="bi bi-speedometer2"></i> Manipulation risk</div>
+            <div class="gauge" id="gauge"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="g-bg"/><circle cx="60" cy="60" r="52" class="g-fg" id="gaugeFg"/></svg>
+              <div class="g-text"><span id="gaugeVal">0</span><small>/100</small></div></div>
+            <span class="badge-risk" id="riskBadge">-</span>
+            <p class="verdict mt-3" id="verdictText"></p>
+          </div>
+        </div>
+        <div class="col-lg-8">
+          <div class="row g-3" id="scoreCards"></div>
+        </div>
+      </div>
+      <div class="row g-4 mt-1">
+        <div class="col-lg-7">
+          <div class="card-x h-100">
+            <div class="card-x-title"><i class="bi bi-clipboard2-pulse"></i> Findings</div>
+            <ul class="finding-list" id="reasonList"></ul>
+          </div>
+        </div>
+        <div class="col-lg-5">
+          <div class="card-x h-100">
+            <div class="card-x-title"><i class="bi bi-lightbulb"></i> Recommendations</div>
+            <ul class="finding-list muted" id="recList"></ul>
+            <div class="small text-muted mt-3">Analysed: <span id="analysedAt" class="mono"></span><br>Case ID: <span id="caseId" class="mono"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= VIEW: METADATA ================= -->
+  <section class="view" id="view-metadata">
+    <div class="page-head"><h1>Metadata Analysis</h1><p>File properties and EXIF data embedded by the camera or editing software.</p></div>
+    <div class="needs-result empty-card"><i class="bi bi-inbox"></i> Run an analysis first.</div>
+    <div class="result-only d-none">
+      <div class="card-x mb-4"><div class="card-x-title"><i class="bi bi-flag"></i> Metadata indicators</div><ul class="finding-list" id="metaFlags"></ul></div>
+      <div class="row g-4">
+        <div class="col-lg-6"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-file-earmark-image"></i> Image &amp; camera information</div>
+          <table class="table table-kv"><tbody id="metaTable"></tbody></table>
+          <a id="gpsLink" class="btn btn-sm btn-outline-info d-none mt-2" target="_blank" rel="noopener"><i class="bi bi-geo-alt"></i> View GPS on map</a></div></div>
+        <div class="col-lg-6"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-braces"></i> Raw EXIF tags <span class="count-pill" id="exifCount"></span></div>
+          <div class="scroll-box"><table class="table table-kv small"><tbody id="exifTable"></tbody></table></div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= VIEW: INTEGRITY ================= -->
+  <section class="view" id="view-integrity">
+    <div class="page-head"><h1>Integrity &amp; Hashes</h1><p>Cryptographic hashes prove the file is unchanged; perceptual hashes find visually similar images.</p></div>
+    <div class="needs-result empty-card"><i class="bi bi-inbox"></i> Run an analysis first.</div>
+    <div class="result-only d-none">
+      <div class="row g-4">
+        <div class="col-lg-6"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-hash"></i> Cryptographic hashes</div>
+          <div id="hashBlock"></div>
+          <div id="hashCheck" class="mt-3"></div></div></div>
+        <div class="col-lg-6"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-eyedropper"></i> Perceptual hashes (ImageHash)</div>
+          <div id="phashBlock"></div>
+          <div class="card-x-title mt-4"><i class="bi bi-copy"></i> Duplicate detection</div>
+          <div id="dupBlock"></div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= VIEW: ELA ================= -->
+  <section class="view" id="view-ela">
+    <div class="page-head"><h1>Error Level Analysis</h1><p>Highlights regions whose JPEG compression error differs from the rest of the image.</p></div>
+    <div class="needs-result empty-card"><i class="bi bi-inbox"></i> Run an analysis first.</div>
+    <div class="result-only d-none">
+      <div class="row g-4">
+        <div class="col-md-6"><div class="card-x"><div class="card-x-title">Original</div><img id="elaOrig" class="img-fluid forensic-img" alt="Original"></div></div>
+        <div class="col-md-6"><div class="card-x"><div class="card-x-title">ELA map <span class="count-pill">Q=90</span></div><img id="elaImg" class="img-fluid forensic-img" alt="ELA result"></div></div>
+        <div class="col-md-6"><div class="card-x"><div class="card-x-title">Suspicious regions</div><img id="elaOverlay" class="img-fluid forensic-img" alt="ELA overlay"></div></div>
+        <div class="col-md-6"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-graph-up"></i> ELA statistics</div>
+          <table class="table table-kv"><tbody id="elaTable"></tbody></table>
+          <div id="elaVerdict" class="callout mt-2"></div></div></div>
+      </div>
+      <div class="card-x mt-4"><div class="card-x-title"><i class="bi bi-question-circle"></i> How does ELA detect manipulation?</div>
+        <p class="mb-2">JPEG compression is lossy: each save introduces a roughly uniform error across the picture. ELA re-saves the image at a known quality (90&nbsp;%) and amplifies the difference with the original.</p>
+        <ul class="mb-0 muted-list">
+          <li><b>Uniform dark/low error</b> &mdash; regions share the same compression history (likely untouched).</li>
+          <li><b>Bright patches</b> &mdash; regions pasted or edited from another source compress differently and stand out.</li>
+          <li><b>Edges and high-contrast textures</b> naturally appear brighter, so ELA is an <i>indicator</i> to be combined with other tests.</li>
+        </ul></div>
+    </div>
+  </section>
+
+  <!-- ================= VIEW: HISTOGRAM ================= -->
+  <section class="view" id="view-histogram">
+    <div class="page-head"><h1>Histogram Analysis</h1><p>Pixel intensity distribution per colour channel and overall brightness.</p></div>
+    <div class="needs-result empty-card"><i class="bi bi-inbox"></i> Run an analysis first.</div>
+    <div class="result-only d-none">
+      <div class="row g-4">
+        <div class="col-lg-6"><div class="card-x"><div class="card-x-title"><i class="bi bi-palette"></i> RGB histogram</div><div class="chart-box"><canvas id="rgbChart"></canvas></div></div></div>
+        <div class="col-lg-6"><div class="card-x"><div class="card-x-title"><i class="bi bi-brightness-high"></i> Brightness distribution</div><div class="chart-box"><canvas id="lumChart"></canvas></div></div></div>
+        <div class="col-lg-5"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-calculator"></i> Statistics</div><table class="table table-kv"><tbody id="histTable"></tbody></table></div></div>
+        <div class="col-lg-7"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-exclamation-triangle"></i> Unusual distributions <span class="count-pill" id="histStatus"></span></div><ul class="finding-list" id="histFindings"></ul></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= VIEW: NOISE & CLONE ================= -->
+  <section class="view" id="view-noise">
+    <div class="page-head"><h1>Noise &amp; Clone Detection</h1><p>Sensor-noise consistency, compression artifacts and copy-move forgery detection.</p></div>
+    <div class="needs-result empty-card"><i class="bi bi-inbox"></i> Run an analysis first.</div>
+    <div class="result-only d-none">
+      <div class="row g-4">
+        <div class="col-lg-6"><div class="card-x"><div class="card-x-title"><i class="bi bi-thermometer-half"></i> Local noise map</div><img id="noiseImg" class="img-fluid forensic-img" alt="Noise map"><div class="small text-muted mt-2">Red = high noise &middot; Blue = low noise. Patches that differ strongly from their surroundings may be spliced or smoothed.</div></div></div>
+        <div class="col-lg-6"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-activity"></i> Noise statistics <span class="count-pill" id="noiseStatus"></span></div>
+          <table class="table table-kv"><tbody id="noiseTable"></tbody></table>
+          <ul class="finding-list mt-2" id="noiseFindings"></ul></div></div>
+        <div class="col-lg-6"><div class="card-x"><div class="card-x-title"><i class="bi bi-files"></i> Clone detection <span class="count-pill" id="cloneStatus"></span></div><img id="cloneImg" class="img-fluid forensic-img" alt="Clone detection"></div></div>
+        <div class="col-lg-6"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-info-circle"></i> Clone result</div>
+          <table class="table table-kv"><tbody id="cloneTable"></tbody></table>
+          <div class="callout" id="cloneSummary"></div>
+          <div class="small text-muted mt-2">Red and green boxes mark the source and the duplicated region; yellow lines join matching keypoints.</div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= VIEW: COMPARE ================= -->
+  <section class="view" id="view-compare">
+    <div class="page-head"><h1>Image Comparison</h1><p>Compare two images by resolution, hashes, similarity, metadata and pixel differences.</p></div>
+    <div id="cmpAlert"></div>
+    <div class="row g-4">
+      <div class="col-md-6"><div class="card-x"><div class="card-x-title">Image A (reference)</div>
+        <div class="dropzone small-dz" data-target="cmpA"><i class="bi bi-image dz-icon"></i><div class="dz-sub">Drop or click to choose</div><input type="file" id="cmpA" accept=".jpg,.jpeg,.png,.bmp" hidden></div>
+        <img id="cmpPrevA" class="img-fluid forensic-img mt-3 d-none" alt="Preview A"></div></div>
+      <div class="col-md-6"><div class="card-x"><div class="card-x-title">Image B (questioned)</div>
+        <div class="dropzone small-dz" data-target="cmpB"><i class="bi bi-image dz-icon"></i><div class="dz-sub">Drop or click to choose</div><input type="file" id="cmpB" accept=".jpg,.jpeg,.png,.bmp" hidden></div>
+        <img id="cmpPrevB" class="img-fluid forensic-img mt-3 d-none" alt="Preview B"></div></div>
+    </div>
+    <button class="btn btn-accent mt-3" id="compareBtn" disabled><i class="bi bi-intersect"></i> Compare images</button>
+    <div class="progress-wrap d-none" id="cmpProgress"><div class="progress"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:100%"></div></div></div>
+
+    <div id="cmpResult" class="d-none mt-4">
+      <div class="row g-3 mb-3" id="cmpCards"></div>
+      <div class="callout mb-4" id="cmpVerdict"></div>
+      <div class="row g-4">
+        <div class="col-lg-6"><div class="card-x"><div class="card-x-title"><i class="bi bi-fire"></i> Pixel difference heat-map</div><img id="cmpDiff" class="img-fluid forensic-img" alt="Difference"></div></div>
+        <div class="col-lg-6"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-hash"></i> Hash &amp; pixel comparison</div><table class="table table-kv small"><tbody id="cmpHashTable"></tbody></table></div></div>
+        <div class="col-12"><div class="card-x"><div class="card-x-title"><i class="bi bi-table"></i> Metadata differences <span class="count-pill" id="cmpMetaCount"></span></div>
+          <div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Field</th><th>Image A</th><th>Image B</th></tr></thead><tbody id="cmpMetaTable"></tbody></table></div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= VIEW: REPORT ================= -->
+  <section class="view" id="view-report">
+    <div class="page-head"><h1>Forensic Report</h1><p>Generate a professional PDF report containing every result of the analysis.</p></div>
+    <div class="needs-result empty-card"><i class="bi bi-inbox"></i> Run an analysis first.</div>
+    <div class="result-only d-none">
+      <div class="card-x">
+        <div class="card-x-title"><i class="bi bi-file-earmark-pdf"></i> Report contents</div>
+        <ul class="muted-list">
+          <li>Image information &amp; metadata</li><li>MD5 / SHA-256 / perceptual hashes</li>
+          <li>ELA result, histogram, noise analysis, clone detection</li>
+          <li>Comparison result (if an image comparison was performed in this session)</li>
+          <li>Overall forensic conclusion, recommendations, date &amp; time of analysis</li>
+        </ul>
+        <div class="form-check form-switch mb-3 d-none" id="includeCmpWrap">
+          <input class="form-check-input" type="checkbox" id="includeCmp" checked>
+          <label class="form-check-label" for="includeCmp">Include latest image comparison</label>
+        </div>
+        <button class="btn btn-accent" id="reportBtn"><i class="bi bi-download"></i> Generate &amp; download PDF</button>
+        <div id="reportMsg" class="mt-3"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= VIEW: ABOUT ================= -->
+  <section class="view" id="view-about">
+    <div class="page-head"><h1>How it works</h1><p>Techniques used by this tool and how to interpret them.</p></div>
+    <div class="row g-4">
+      <div class="col-md-6 col-xl-4"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-card-list"></i> Metadata</div>Reads EXIF tags (camera, date, GPS, software). Missing EXIF or editor signatures such as Photoshop are red flags.</div></div>
+      <div class="col-md-6 col-xl-4"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-fingerprint"></i> Hashing</div>MD5 &amp; SHA-256 prove bit-exact integrity. Perceptual hashes (aHash, pHash, dHash, wHash) find resized or re-compressed copies.</div></div>
+      <div class="col-md-6 col-xl-4"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-layers-half"></i> ELA</div>Re-compresses at 90&nbsp;% and amplifies the difference. Edited regions have a different error level.</div></div>
+      <div class="col-md-6 col-xl-4"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-bar-chart-line"></i> Histogram</div>Detects clipping, combing gaps and narrow tonal range produced by Levels/Curves adjustments.</div></div>
+      <div class="col-md-6 col-xl-4"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-soundwave"></i> Noise</div>Block-wise residual noise (Immerkaer sigma, median-filter residual) and 8&times;8 JPEG blocking ratio reveal inconsistent regions.</div></div>
+      <div class="col-md-6 col-xl-4"><div class="card-x h-100"><div class="card-x-title"><i class="bi bi-files"></i> Clone detection</div>ORB keypoints are matched against themselves; RANSAC validates a consistent geometric transform = copy-move.</div></div>
+    </div>
+    <div class="callout mt-4"><b>Disclaimer:</b> automated forensics gives probabilistic indicators, not legal proof. Always verify with a qualified examiner and preserve the original evidence.</div>
+  </section>
+
+  <footer class="foot">Digital Image Forensics Tool &middot; Cyber Security &amp; Digital Forensics Mini Project</footer>
+</main>
+
+<!-- Loading overlay for report/compare -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" id="toasts"></div>
+
+<script src="{{ url_for('static', filename='vendor/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

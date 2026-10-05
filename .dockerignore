@@ -1,0 +1,6 @@
+__pycache__
+venv
+.git
+data
+static/uploads/*
+static/reports/*
